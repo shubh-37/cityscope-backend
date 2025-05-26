@@ -9,7 +9,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "start:prod": "pm2 start ecosystem.config.js",
+    "stop:prod": "pm2 stop cityscope-backend",
+    "delete:prod": "pm2 delete cityscope-backend"
   },
   "dependencies": {
     "aws-sdk": "^2.1692.0",
@@ -23,6 +26,7 @@
     "multer": "^2.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "pm2": "^6.0.6"
   }
 }
