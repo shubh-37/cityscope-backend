@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const auth = require('../middleware/auth');
 const AWS = require('aws-sdk');
+const multer = require('multer');
+
 
  function usersRoutes(app, Models) {
   AWS.config.update({
@@ -10,7 +12,7 @@ const AWS = require('aws-sdk');
     secretAccessKey: process.env.AWS_ACCESS_SECRET_KEY,
     region: process.env.AWS_ACCESS_REGION
   });
-  
+  const upload = multer(); 
   const s3 = new AWS.S3();  
   const User = Models.User;
     app.post('/api/users/signup', async (req, res) => {
@@ -154,31 +156,53 @@ const AWS = require('aws-sdk');
     app.get('/api/users/authenticate', auth, async (req, res) => {
       return res.status(200).json({ message: 'Authenticated' });
     });
-    app.put('/api/users/profile', auth, async (req, res) => {
-      const { bio } = req.body;
-      const userInstance = await User.findById(req.user.userId);
-      if(!userInstance){
-        return res.status(404).json({ error: 'User not found' });
+    app.put('/api/users/profile', auth, upload.array('image', 1), async (req, res) => { 
+      try {
+        const userInstance = await User.findById(req.user.userId);
+        if(!userInstance){
+          return res.status(404).json({ error: 'User not found' });
+        }
+        
+        console.log('Request body:', req.body);
+        console.log('Request file:', req.file);
+        console.log('Request files:', req.files);
+        
+        if(req.body && req.body.bio){
+          userInstance.bio = req.body.bio;
+        }
+        
+        let uploadResult = null;
+        if(req.file) {
+          // Handle single file upload with upload.single
+          const profilePic = req.file;
+          const uploadParams = {
+            Bucket: process.env.S3_USER_BUCKET_NAME,
+            Key: `users/${req.user.userId}.jpg`,
+            Body: profilePic.buffer,
+            ContentType: profilePic.mimetype,
+          };
+          uploadResult = await s3.upload(uploadParams).promise();
+        } else if(req.files && req.files.length > 0) {
+          const profilePic = req.files[0];
+          const uploadParams = {
+            Bucket: process.env.S3_USER_BUCKET_NAME,
+            Key: `users/${req.user.userId}.jpg`,
+            Body: profilePic.buffer,
+            ContentType: profilePic.mimetype,
+          };
+          uploadResult = await s3.upload(uploadParams).promise(); 
+        }
+        console.log(uploadResult);
+        if(uploadResult){
+          userInstance.profilePic = uploadResult.Location;
+        }
+        
+        await userInstance.save();
+        return res.status(200).json({ user: userInstance, message: 'Profile updated successfully' });
+      } catch (error) {
+        console.error('Update profile error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
       }
-      if(bio){
-        userInstance.bio = bio;
-      }
-      let uploadResult = null;
-      if(req.files && req.files.length > 0){
-        const profilePic = req.files[0];
-        const uploadParams = {
-          Bucket: process.env.S3_BUCKET_NAME,
-          Key: `users/${req.user.userId}.jpg`,
-          Body: profilePic.buffer,
-          ContentType: profilePic.mimetype,
-        };
-        uploadResult = await s3.upload(uploadParams).promise(); 
-      }
-      if(uploadResult){
-        userInstance.profilePic = uploadResult.Location;
-      }
-      await userInstance.save();
-      return res.status(200).json({ user: userInstance });
     });
 }
 

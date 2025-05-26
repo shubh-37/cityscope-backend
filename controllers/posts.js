@@ -225,13 +225,14 @@ function postsRoutes(app, Models) {
 
   app.get('/api/posts/user', auth, async (req, res) => {
     try {
+      const user = await User.findById(req.user.userId);
       const posts = await Post.find({ author: req.user.userId })
         .populate('author', 'username profilePic')
         .populate('comments.user', 'username profilePic')
         .populate('likes.user', 'username')
         .sort({ createdAt: -1 });
   
-      res.json({ posts });
+      res.json({ posts, user });
     } catch (error) {
       console.error('Get user posts error:', error);
       res.status(500).json({ error: 'Internal server error' });
